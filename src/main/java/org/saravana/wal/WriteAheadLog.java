@@ -6,4 +6,6 @@ public interface WriteAheadLog {
     void delete(String key);
     void flush();
     void recover();
+
+    void createCheckPoint();
 }

@@ -10,46 +10,66 @@ public class WriteAheadLogFile implements WriteAheadLog {
     private File checkpointFile;
     private File logFile;
 
+    boolean isCompacting = false;
+
     @Override
     public void write(String key, String value) {
-        try (FileWriter writer = new FileWriter(logFile, true)) {
-            writer.write("WRITE " + key + " " + value + "\n");
-        } catch (IOException e) {
-            // Handle the exception
+        if(!isCompacting) {
+            try (FileWriter writer = new FileWriter(logFile, true)) {
+                writer.write("WRITE " + key + " " + value + "\n");
+            } catch (IOException e) {
+                // Handle the exception
+            }
+        } else {
+            throw new RuntimeException("Compaction is happening..");
         }
     }
 
     @Override
     public void update(String key, String value) {
-        try (FileWriter writer = new FileWriter(logFile, true)) {
-            writer.write("UPDATE " + key + " " + value + "\n");
-        } catch (IOException e) {
-            // Handle the exception
+        if(!isCompacting) {
+            try (FileWriter writer = new FileWriter(logFile, true)) {
+                writer.write("UPDATE " + key + " " + value + "\n");
+            } catch (IOException e) {
+                // Handle the exception
+            }
+        } else {
+            throw new RuntimeException("Compaction is happening..");
+
         }
     }
 
 
     @Override
     public void delete(String key) {
-        try (FileWriter writer = new FileWriter(logFile, true)) {
-            writer.write("DELETE " + key +  "\n");
-        } catch (IOException e) {
-            // Handle the exception
+        if(!isCompacting) {
+            try (FileWriter writer = new FileWriter(logFile, true)) {
+                writer.write("DELETE " + key +  "\n");
+            } catch (IOException e) {
+                // Handle the exception
+            }
+        } else {
+            throw new RuntimeException("Compaction is happening..");
         }
     }
 
     @Override
     public void flush() {
-        try (FileWriter writer = new FileWriter(logFile, true)) {
-            writer.flush();
-        } catch (IOException e) {
-            // Handle the exception
-        }
+       if(!isCompacting){
+           try (FileWriter writer = new FileWriter(logFile, true)) {
+               writer.flush();
+           } catch (IOException e) {
+               // Handle the exception
+           }
+       } else {
+           throw new RuntimeException("Compaction is happening..");
+
+       }
     }
 
     @Override
     public void recover() {
-// Implement recovery logic here
+        // Implement recovery logic here
         // Read the entries from the log file and apply them to restore the database state
         try (BufferedReader reader = new BufferedReader(new FileReader(logFile))) {
             String line;
@@ -65,28 +85,30 @@ public class WriteAheadLogFile implements WriteAheadLog {
         }
     }
 
+    @Override
+    public void createCheckPoint() {
+        compactLogSimple();
+    }
+
     public WriteAheadLogFile(String logFilePath, String checkpointFilePath) {
         this.logFile = new File(logFilePath);
         this.checkpointFile = new File(checkpointFilePath);
     }
 
-    // Other methods such as write, update, delete, flush, and recover would be implemented here
-
-    public void createCheckpoint() {
-        // Implement checkpoint logic to create a checkpoint file
-        // ...
-        compactLogSimple();
-    }
 
     private void compactLogSimple() {
+        isCompacting = true;
         Map<String, String> compactedLog = new HashMap<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(logFile))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] parts = line.split(" ");
+                String value = null;
                 String operation = parts[0];
                 String key = parts[1];
-                String value = parts[2];
+                if(parts.length > 2) {
+                    value = parts[2];
+                }
                 // Consolidate redundant updates for the same key
                 if (operation.equals("WRITE") || operation.equals("UPDATE")) {
                     compactedLog.put(key, value);
@@ -118,6 +140,6 @@ public class WriteAheadLogFile implements WriteAheadLog {
                 // Handle the delete failure
             }
         }
+        isCompacting = false;
     }
-}
 }
